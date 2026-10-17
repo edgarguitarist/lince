@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Solo en debug: correr yt-dlp de la app desde adb para diagnosticar sitios. -->
+        <receiver android:name=".Prueba" android:exported="true" />
+    </application>
+</manifest>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cabeza de lince geométrica. Ojos, nariz e interior de las orejas son huecos (evenOdd) que dejan ver el fondo
+  amarillo, así que sirve también como ícono monocromo. El grupo lo achica a la zona segura de 66 dp.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="47"
+        android:scaleX="0.74"
+        android:scaleY="0.74"
+        android:translateY="7">
+        <!-- Orejas, con el interior hueco -->
+        <path
+            android:fillColor="#1B1B1B"
+            android:fillType="evenOdd"
+            android:pathData="M31,50 L37,20 L52,40 Z M36.5,41 L38.5,28 L45,39 Z M77,50 L71,20 L56,40 Z M71.5,41 L69.5,28 L63,39 Z" />
+        <!-- Penachos -->
+        <path
+            android:fillColor="#1B1B1B"
+            android:pathData="M35.5,24 L37,11 L39.5,23 Z M72.5,24 L71,11 L68.5,23 Z" />
+        <!-- Cabeza con la barba del lince; ojos y nariz huecos -->
+        <path
+            android:fillColor="#1B1B1B"
+            android:fillType="evenOdd"
+            android:pathData="M54,35 L66,39 L76,49 L81,66 L74,64.5 L76,73 L66,72 L60,80 L54,83 L48,80 L42,72 L32,73 L34,64.5 L27,66 L32,49 L42,39 Z M39,56 Q45,49.5 51,56 Q45,60.5 39,56 Z M57,56 Q63,49.5 69,56 Q63,60.5 57,56 Z M50.5,64 L57.5,64 L54,68 Z" />
+        <!-- Pupilas -->
+        <path
+            android:fillColor="#1B1B1B"
+            android:pathData="M45,52.8 L46.1,56 L45,59.2 L43.9,56 Z M63,52.8 L64.1,56 L63,59.2 L61.9,56 Z" />
+    </group>
+</vector>
