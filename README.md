@@ -8,6 +8,16 @@ Descargador para Android al estilo Snaptube, sin anuncios. Compartes un enlace d
 - **Más formatos**: todas las resoluciones disponibles.
 - **Listas**: elegir qué vídeos y la calidad; se bajan de a dos.
 
+## Descargar
+
+Baja el APK de la [última versión](https://github.com/edgarguitarist/lince/releases/latest) e instálalo (Android te pedirá permitir instalar desde el navegador o el explorador de archivos que uses).
+
+| APK | Para quién |
+|---|---|
+| `app-arm64-v8a-release.apk` | **Casi todos los teléfonos actuales.** Si dudas, este. |
+| `app-armeabi-v7a-release.apk` | Teléfonos antiguos de 32 bits |
+| `app-x86_64-release.apk` | Emuladores (BlueStacks, Android Studio) y algunas tabletas |
+
 ## Estados de WhatsApp
 
 Pestaña «Estados»: muestra los estados que ya viste en WhatsApp (o WhatsApp Business) y los guarda en `Descargas/Lince/Estados`. WhatsApp los deja en `Android/media/com.whatsapp/WhatsApp/Media/.Statuses`; desde Android 11 esa carpeta solo se puede leer con el selector del sistema, así que se pide acceso una vez (el selector se abre justo ahí) y el permiso queda guardado. Solo aparecen los estados ya abiertos en WhatsApp: los baja recién cuando los ves.
@@ -29,7 +39,7 @@ Requiere el SDK de Android (`local.properties` → `sdk.dir`) y un JDK 17 a 22.
 ./gradlew assembleRelease
 ```
 
-Deja un APK por arquitectura en `app/build/outputs/apk/release/`. Casi todos los teléfonos actuales usan `app-arm64-v8a-release.apk`. Se firma con la llave debug: es para uso personal.
+Deja un APK por arquitectura en `app/build/outputs/apk/release/`. Casi todos los teléfonos actuales usan `app-arm64-v8a-release.apk`. Se firma con la llave de release si defines `LINCE_STORE_FILE`, `LINCE_STORE_PASSWORD`, `LINCE_KEY_ALIAS` y `LINCE_KEY_PASSWORD` (en `~/.gradle/gradle.properties` o como variables de entorno); si faltan, usa la llave debug. Una APK firmada con otra llave no se puede instalar encima de otra: hay que desinstalar antes.
 
 ## Estructura
 

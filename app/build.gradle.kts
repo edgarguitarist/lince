@@ -28,14 +28,30 @@ android {
         }
     }
 
+    // La llave de release vive fuera del repo; las claves salen de ~/.gradle/gradle.properties
+    // (LINCE_STORE_FILE, LINCE_STORE_PASSWORD, LINCE_KEY_ALIAS, LINCE_KEY_PASSWORD) o de variables de entorno.
+    fun clave(nombre: String): String? =
+        (project.findProperty(nombre) as String?) ?: System.getenv(nombre)
+    val almacen = clave("LINCE_STORE_FILE")?.takeIf { file(it).exists() }
+    signingConfigs {
+        if (almacen != null) {
+            create("release") {
+                storeFile = file(almacen)
+                storePassword = clave("LINCE_STORE_PASSWORD")
+                keyAlias = clave("LINCE_KEY_ALIAS")
+                keyPassword = clave("LINCE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             // R8 quita lo que no se usa (sobre todo los íconos): baja el APK unos 60 MB.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Uso personal: se firma con la llave debug para instalarlo directo.
-            signingConfig = signingConfigs.getByName("debug")
+            // Con la llave de release si está configurada; si no, la debug (para compilar sin ella).
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
