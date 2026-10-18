@@ -14,9 +14,9 @@ Baja el APK de la [última versión](https://github.com/edgarguitarist/lince/rel
 
 | APK | Para quién |
 |---|---|
-| `app-arm64-v8a-release.apk` | **Casi todos los teléfonos actuales.** Si dudas, este. |
-| `app-armeabi-v7a-release.apk` | Teléfonos antiguos de 32 bits |
-| `app-x86_64-release.apk` | Emuladores (BlueStacks, Android Studio) y algunas tabletas |
+| `Lince-…-arm64-v8a.apk` | **Casi todos los teléfonos actuales.** Si dudas, este. |
+| `Lince-…-armeabi-v7a.apk` | Teléfonos antiguos de 32 bits |
+| `Lince-…-x86_64.apk` | Emuladores (BlueStacks, Android Studio) y algunas tabletas |
 
 ## Estados de WhatsApp
 
@@ -39,7 +39,7 @@ Requiere el SDK de Android (`local.properties` → `sdk.dir`) y un JDK 17 a 22.
 ./gradlew assembleRelease
 ```
 
-Deja un APK por arquitectura en `app/build/outputs/apk/release/`. Casi todos los teléfonos actuales usan `app-arm64-v8a-release.apk`. Se firma con la llave de release si defines `LINCE_STORE_FILE`, `LINCE_STORE_PASSWORD`, `LINCE_KEY_ALIAS` y `LINCE_KEY_PASSWORD` (en `~/.gradle/gradle.properties` o como variables de entorno); si faltan, usa la llave debug. Una APK firmada con otra llave no se puede instalar encima de otra: hay que desinstalar antes.
+Deja un APK por arquitectura en `app/build/outputs/apk/release/`. Casi todos los teléfonos actuales usan `Lince-…-arm64-v8a.apk`. Se firma con la llave de release si defines `LINCE_STORE_FILE`, `LINCE_STORE_PASSWORD`, `LINCE_KEY_ALIAS` y `LINCE_KEY_PASSWORD` (en `~/.gradle/gradle.properties` o como variables de entorno); si faltan, usa la llave debug. Una APK firmada con otra llave no se puede instalar encima de otra: hay que desinstalar antes.
 
 ## Estructura
 

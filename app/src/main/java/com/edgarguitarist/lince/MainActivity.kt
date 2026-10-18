@@ -58,6 +58,7 @@ import com.edgarguitarist.lince.ui.BotonAmarillo
 import com.edgarguitarist.lince.ui.Fondo
 import com.edgarguitarist.lince.ui.HojaDescarga
 import com.edgarguitarist.lince.ui.Linea
+import com.edgarguitarist.lince.ui.PantallaAcerca
 import com.edgarguitarist.lince.ui.PantallaEstados
 import com.edgarguitarist.lince.ui.Superficie
 import com.edgarguitarist.lince.ui.TemaLince
@@ -90,9 +91,11 @@ private fun Inicio() {
     ) {
         Spacer(Modifier.height(16.dp))
         Text("Lince", fontSize = 28.sp, fontWeight = FontWeight.Black, color = Amarillo)
-        Pestanas(listOf("Descargar", "Estados"), pestana) { pestana = it }
+        Pestanas(listOf("Descargar", "Estados", "Acerca de"), pestana) { pestana = it }
         if (pestana == 1) {
             PantallaEstados(Modifier.weight(1f))
+        } else if (pestana == 2) {
+            PantallaAcerca(Modifier.weight(1f))
         } else {
             Text("Comparte un enlace desde cualquier app, o pégalo aquí.", color = TextoSec, fontSize = 14.sp)
             Spacer(Modifier.height(20.dp))
