@@ -69,12 +69,12 @@ fun Video.alturas(): List<Int> =
 private fun Formato.prefMp4() = if (ext == "mp4" || ext == "m4a") 1 else 0
 
 private fun Video.mejorAudio(): Formato? =
-    formatos.filter { it.soloAudio }.maxWithOrNull(compareBy({ it.prefMp4() }, { it.tam ?: 0 }))
+    formatos.filter { it.soloAudio }.maxWithOrNull(compareBy({ it.prefMp4() }, { it.tam ?: 0L }))
 
 /** Estima el tamaño de lo que bajará `-S res:<alto>,ext:mp4:m4a`. */
 fun Video.tamVideo(alto: Int): Long? {
     val v = formatos.filter { it.tieneVideo && it.alto == alto }
-        .maxWithOrNull(compareBy({ it.prefMp4() }, { it.tam ?: 0 })) ?: return null
+        .maxWithOrNull(compareBy({ it.prefMp4() }, { it.tam ?: 0L })) ?: return null
     val tv = v.tam ?: return null
     if (v.tieneAudio) return tv
     return tv + (mejorAudio()?.tam ?: 0)
