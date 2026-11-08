@@ -128,6 +128,8 @@ class DescargaWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
                     // Pasado 1080p no hay H.264 y se queda con VP9/AV1.
                     addOption("-S", if (alto > 0) "res:$alto,vcodec:h264,ext:mp4:m4a" else "vcodec:h264,ext:mp4:m4a")
                     addOption("--merge-output-format", "mp4")
+                    // Publicaciones de fotos de TikTok: arma el MP4 con las fotos y la música (plugin lince_fotos.py).
+                    addOption("--use-postprocessor", "LinceFotos:when=after_move")
                     if (sub != null) {
                         addOption(if (inputData.getBoolean("subAuto", false)) "--write-auto-subs" else "--write-subs")
                         addOption("--sub-langs", sub)

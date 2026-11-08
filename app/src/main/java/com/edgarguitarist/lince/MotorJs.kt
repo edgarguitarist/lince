@@ -28,7 +28,6 @@ import kotlin.concurrent.thread
  */
 object MotorJs {
     private const val TAG = "LinceJs"
-    private const val PLUGIN = "plugins/lince/yt_dlp_plugins/extractor/lince_jcp.py"
 
     @Volatile private var dir: File? = null
     private val token = ByteArray(16).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
@@ -42,10 +41,7 @@ object MotorJs {
         if (dir != null) return
         app = ctx.applicationContext
         val base = File(app.filesDir, "jsc")
-        File(base, PLUGIN).apply {
-            parentFile!!.mkdirs()
-            app.assets.open(PLUGIN).use { i -> outputStream().use { i.copyTo(it) } }
-        }
+        copiarAssets("plugins", File(base, "plugins"))
         val server = ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"))
         thread(name = "lince-jsc", isDaemon = true) {
             while (true) {
@@ -57,6 +53,14 @@ object MotorJs {
         File(base, "plugins/lince/conexion.json").writeText(JSONObject().put("port", server.localPort).put("token", token).toString())
         main.post { webView() }
         dir = File(base, "plugins")
+    }
+
+    /** Copia la carpeta de assets entera: los plugins de yt-dlp son varios archivos (`assets.list` da vacío en un archivo). */
+    private fun copiarAssets(ruta: String, destino: File) {
+        val hijos = app.assets.list(ruta).orEmpty()
+        if (hijos.isNotEmpty()) return hijos.forEach { copiarAssets("$ruta/$it", File(destino, it)) }
+        destino.parentFile!!.mkdirs()
+        app.assets.open(ruta).use { i -> destino.outputStream().use { i.copyTo(it) } }
     }
 
     /** Las opciones que hacen que yt-dlp use el WebView. */

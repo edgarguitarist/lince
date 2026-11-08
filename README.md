@@ -7,6 +7,7 @@ Descargador para Android al estilo Snaptube, sin anuncios. Compartes un enlace d
 - **Subtítulos**: los del video (y los automáticos en español, inglés o el idioma original), incrustados en el MP4 (los reproductores los muestran como pista).
 - **Más formatos**: todas las resoluciones disponibles.
 - **Listas**: elegir qué vídeos y la calidad; se bajan de a dos.
+- **TikTok de fotos** (`/photo/`, que yt-dlp no reconoce): arma un MP4 con las fotos y la música, o baja solo el audio. Lo hacen los plugins `lince_tiktok.py` y `lince_fotos.py`.
 
 ## Descargar
 
