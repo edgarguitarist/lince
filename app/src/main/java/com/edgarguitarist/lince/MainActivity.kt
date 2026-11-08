@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.edgarguitarist.lince.ui.Amarillo
+import com.edgarguitarist.lince.ui.AvisoActualizacion
 import com.edgarguitarist.lince.ui.BotonAmarillo
 import com.edgarguitarist.lince.ui.Fondo
 import com.edgarguitarist.lince.ui.HojaDescarga
@@ -149,6 +150,7 @@ private fun Inicio() {
     }
 
     analizando?.let { u -> HojaDescarga(u) { analizando = null } }
+    AvisoActualizacion()
 }
 
 /** Pestañas de texto con subrayado amarillo, como las de Snaptube. */

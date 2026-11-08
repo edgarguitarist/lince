@@ -13,6 +13,8 @@ Descargador para Android al estilo Snaptube, sin anuncios. Compartes un enlace d
 
 Baja el APK de la [última versión](https://github.com/edgarguitarist/lince/releases/latest) e instálalo (Android te pedirá permitir instalar desde el navegador o el explorador de archivos que uses).
 
+Desde la 0.6.4, Lince avisa al abrirse cuando hay una versión nueva y, si aceptas, baja el APK de tu misma arquitectura y abre el instalador (la primera vez Android pide permitir instalar apps desde Lince).
+
 | APK | Para quién |
 |---|---|
 | `Lince-…-arm64-v8a.apk` | **Casi todos los teléfonos actuales.** Si dudas, este. |
@@ -56,6 +58,7 @@ Deja un APK por arquitectura en `app/build/outputs/apk/release/`. Casi todos los
 | `Navegador.kt` | Plan B con WebView para sitios que bloquean a yt-dlp |
 | `Estados.kt`, `ui/PantallaEstados.kt` | Estados de WhatsApp: acceso, listado y guardado |
 | `Descargas.kt` | Encolar y copiar el resultado a Descargas vía MediaStore |
+| `Actualizador.kt`, `ui/AvisoActualizacion.kt` | Avisa de releases nuevos en GitHub, baja el APK de la misma arquitectura y abre el instalador |
 
 ## Diagnóstico
 
