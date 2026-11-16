@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -23,6 +24,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -59,6 +62,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,10 +79,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.edgarguitarist.lince.Analisis
 import com.edgarguitarist.lince.Descargas
 import com.edgarguitarist.lince.Entrada
+import com.edgarguitarist.lince.Imagen
 import com.edgarguitarist.lince.Motor
+import com.edgarguitarist.lince.Navegador
 import com.edgarguitarist.lince.Opcion
 import com.edgarguitarist.lince.Subtitulo
 import com.edgarguitarist.lince.Video
@@ -100,6 +107,15 @@ class AnalisisVM(app: Application) : AndroidViewModel(app) {
     var estado by mutableStateOf<Estado>(Estado.Cargando)
         private set
     private var url: String? = null
+
+    /** Pasa de la hoja del video a las fotos de su publicación. */
+    fun imagenes(v: Video) {
+        estado = Estado.Cargando
+        viewModelScope.launch {
+            estado = Motor.imagenes(getApplication(), v)?.let { Estado.Listo(it) }
+                ?: Estado.Error("No encontré imágenes en esta página")
+        }
+    }
 
     fun analizar(u: String, forzar: Boolean = false) {
         if (u == url && !forzar) return
@@ -148,7 +164,12 @@ fun HojaDescarga(url: String, onCerrar: () -> Unit) {
                 Estado.Cargando -> VistaCargando(url)
                 is Estado.Error -> VistaError(e.msg) { vm.analizar(url, forzar = true) }
                 is Estado.Listo -> when (val a = e.analisis) {
-                    is Analisis.Unico -> VistaVideo(a.video) { op, sub ->
+                    is Analisis.Imagenes -> VistaImagenes(a) { elegidas ->
+                        Descargas.encolarImagenes(ctx, a.titulo, a.pagina, elegidas)
+                        Toast.makeText(ctx, "Descargando…", Toast.LENGTH_SHORT).show()
+                        cerrar()
+                    }
+                    is Analisis.Unico -> VistaVideo(a.video, { vm.imagenes(a.video) }) { op, sub ->
                         Descargas.encolar(ctx, a.video.url, a.video.titulo, op, sub, a.video.urlDirecta(op))
                         Toast.makeText(ctx, "Descargando…", Toast.LENGTH_SHORT).show()
                         cerrar()
@@ -227,7 +248,7 @@ private fun Cabecera(video: Video) {
 }
 
 @Composable
-private fun VistaVideo(video: Video, onDescargar: (Opcion, Subtitulo?) -> Unit) {
+private fun VistaVideo(video: Video, onImagenes: () -> Unit, onDescargar: (Opcion, Subtitulo?) -> Unit) {
     val rapidas = remember(video) { video.opcionesRapidas() }
     val todas = remember(video) { video.todasLasOpciones() }
     var sel by remember(video) { mutableStateOf<Opcion>(rapidas.last().second) }
@@ -271,6 +292,7 @@ private fun VistaVideo(video: Video, onDescargar: (Opcion, Subtitulo?) -> Unit) 
                 FilaAjuste("Subtítulos", sub?.nombre ?: "No") { pagina = "subs" }
             }
             FilaAjuste("Más formatos", "Todo") { pagina = "formatos" }
+            FilaAjuste("Imágenes", if (video.imagenes.isEmpty()) "Buscar" else "${video.imagenes.size}", onImagenes)
             Spacer(Modifier.height(16.dp))
             BotonAmarillo("Descargar") { onDescargar(sel, sub.takeIf { sel is Opcion.Vid }) }
         }
@@ -365,17 +387,7 @@ private fun VistaLista(lista: Analisis.Lista, onDescargar: (List<Entrada>, Opcio
             )
         }
     }
-    Row(
-        Modifier.fillMaxWidth().padding(top = 8.dp).clickable {
-            if (marcados.size == lista.entradas.size) marcados.clear()
-            else { marcados.clear(); marcados.addAll(lista.entradas.indices) }
-        },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Checkbox(marcados.size == lista.entradas.size, null, colors = CheckboxDefaults.colors(checkedColor = Amarillo, checkmarkColor = Color.Black))
-        Spacer(Modifier.width(8.dp))
-        Text("Seleccionar todo", color = Color.White)
-    }
+    FilaTodo(marcados, lista.entradas.size)
     HorizontalDivider(color = Linea)
     LazyColumn(Modifier.heightIn(max = 340.dp)) {
         itemsIndexed(lista.entradas) { i, e ->
@@ -393,6 +405,58 @@ private fun VistaLista(lista: Analisis.Lista, onDescargar: (List<Entrada>, Opcio
     Spacer(Modifier.height(16.dp))
     BotonAmarillo("Descargar (${marcados.size})", habilitado = marcados.isNotEmpty()) {
         onDescargar(marcados.sorted().map { lista.entradas[it] }, calidad)
+    }
+}
+
+@Composable
+private fun FilaTodo(marcados: SnapshotStateList<Int>, total: Int) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp).clickable {
+            if (marcados.size == total) marcados.clear()
+            else { marcados.clear(); marcados.addAll(0 until total) }
+        },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(marcados.size == total, null, colors = CheckboxDefaults.colors(checkedColor = Amarillo, checkmarkColor = Color.Black))
+        Spacer(Modifier.width(8.dp))
+        Text("Seleccionar todo", color = Color.White)
+    }
+}
+
+/** Las fotos de una publicación, en cuadrícula: se tocan para marcar cuáles bajar. */
+@Composable
+private fun VistaImagenes(a: Analisis.Imagenes, onDescargar: (List<Imagen>) -> Unit) {
+    val ctx = LocalContext.current
+    val n = a.imagenes.size
+    val marcadas = remember(a) { mutableStateListOf(*a.imagenes.indices.toList().toTypedArray()) }
+
+    Titulo(if (n == 1) "Descargar imagen" else "Descargar imágenes")
+    Text(a.titulo, color = Color.White, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp))
+    if (n > 1) FilaTodo(marcadas, n)
+    LazyVerticalGrid(
+        GridCells.Fixed(minOf(n, 3)),
+        Modifier.padding(top = 10.dp).heightIn(max = 380.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        items(n) { i ->
+            Box(
+                Modifier.aspectRatio(1f).clip(RoundedCornerShape(8.dp)).background(Superficie)
+                    .clickable { if (i in marcadas) marcadas.remove(i) else marcadas.add(i) }
+            ) {
+                AsyncImage(
+                    // Hay CDN que no sirven la imagen sin el Referer de su página.
+                    ImageRequest.Builder(ctx).data(a.imagenes[i].mini)
+                        .addHeader("Referer", a.pagina).addHeader("User-Agent", Navegador.UA).build(),
+                    "Imagen ${i + 1}", contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize(),
+                )
+                Box(Modifier.align(Alignment.TopEnd).padding(6.dp).background(Color(0x66000000), CircleShape)) { Radio(i in marcadas) }
+            }
+        }
+    }
+    Spacer(Modifier.height(16.dp))
+    BotonAmarillo(if (n == 1) "Descargar" else "Descargar (${marcadas.size})", habilitado = marcadas.isNotEmpty()) {
+        onDescargar(marcadas.sorted().map { a.imagenes[it] })
     }
 }
 

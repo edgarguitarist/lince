@@ -31,7 +31,12 @@ data class Video(
     val subtitulos: List<Subtitulo>,
     /** true si salió del [Navegador]: se baja la URL directa del formato, no la página. */
     val directo: Boolean = false,
+    /** Las fotos de la publicación, si ya se conocen (TikTok de fotos, tuits con video y fotos). */
+    val imagenes: List<Imagen> = emptyList(),
 )
+
+/** Una foto para bajar; `mini` es una versión liviana para la cuadrícula, si el sitio la da. */
+data class Imagen(val url: String, val mini: String = url)
 
 /** La URL directa a bajar para la opción elegida (para audio, la calidad más liviana). */
 fun Video.urlDirecta(op: Opcion): String? {
@@ -48,6 +53,8 @@ data class Entrada(val url: String, val titulo: String, val duracion: Double?)
 sealed interface Analisis {
     data class Unico(val video: Video) : Analisis
     data class Lista(val titulo: String, val entradas: List<Entrada>) : Analisis
+    /** `pagina` es de dónde salieron: va como Referer al bajarlas. */
+    data class Imagenes(val titulo: String, val pagina: String, val imagenes: List<Imagen>) : Analisis
 }
 
 /** Lo que el usuario elige en la hoja. */

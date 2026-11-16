@@ -2,7 +2,11 @@ package com.edgarguitarist.lince.ui
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
+import android.view.Gravity
+import android.widget.FrameLayout
 import android.widget.Toast
+import android.widget.VideoView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -21,12 +25,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -52,6 +59,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import coil.compose.AsyncImage
 import com.edgarguitarist.lince.Descargas
@@ -72,6 +82,22 @@ fun PantallaEstados(modifier: Modifier = Modifier) {
     var lista by remember(app) { mutableStateOf<List<Estados.Estado>?>(null) }
     var guardados by remember { mutableStateOf(Estados.guardados(ctx)) }
     val guardando = remember { mutableStateOf(setOf<String>()) }
+    // El estado abierto en el visor: su posición en la lista visible.
+    var viendo by remember(app, filtro) { mutableStateOf<Int?>(null) }
+    val guardar: (Estados.Estado) -> Unit = { e ->
+        guardando.value = guardando.value + e.nombre
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { Estados.guardar(ctx, e) } }
+            guardando.value = guardando.value - e.nombre
+            guardados = Estados.guardados(ctx)
+            Toast.makeText(
+                ctx,
+                if (r.isSuccess) "Guardado en Descargas/${Descargas.CARPETA}/${Estados.SUBCARPETA}"
+                else "No se pudo guardar: ${r.exceptionOrNull()?.message}",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
 
     LifecycleResumeEffect(Unit) {
         recarga++
@@ -148,29 +174,69 @@ fun PantallaEstados(modifier: Modifier = Modifier) {
                     e = e,
                     guardado = e.nombre in guardados,
                     ocupado = e.nombre in guardando.value,
-                    onAbrir = {
-                        val i = Intent(Intent.ACTION_VIEW).setDataAndType(e.uri, Descargas.mime(e.nombre))
-                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        runCatching { ctx.startActivity(i) }
-                    },
-                    onGuardar = {
-                        guardando.value = guardando.value + e.nombre
-                        scope.launch {
-                            val r = withContext(Dispatchers.IO) { runCatching { Estados.guardar(ctx, e) } }
-                            guardando.value = guardando.value - e.nombre
-                            guardados = Estados.guardados(ctx)
-                            Toast.makeText(
-                                ctx,
-                                if (r.isSuccess) "Guardado en Descargas/${Descargas.CARPETA}/${Estados.SUBCARPETA}"
-                                else "No se pudo guardar: ${r.exceptionOrNull()?.message}",
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        }
-                    },
+                    onAbrir = { viendo = visibles.indexOf(e) },
+                    onGuardar = { guardar(e) },
                 )
             }
         }
+        viendo?.takeIf { it in visibles.indices }?.let { i ->
+            Visor(visibles, i, guardados, guardando.value, guardar) { viendo = null }
+        }
     }
+}
+
+/** El estado a pantalla completa, dentro de la app: se desliza a los lados para pasar al siguiente. */
+@Composable
+private fun Visor(
+    lista: List<Estados.Estado>,
+    inicio: Int,
+    guardados: Set<String>,
+    guardando: Set<String>,
+    onGuardar: (Estados.Estado) -> Unit,
+    onCerrar: () -> Unit,
+) {
+    Dialog(onDismissRequest = onCerrar, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val pager = rememberPagerState(initialPage = inicio) { lista.size }
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            HorizontalPager(pager, Modifier.fillMaxSize()) { i ->
+                val e = lista[i]
+                // Solo reproduce el video que está a la vista; los de al lado muestran su primer cuadro.
+                if (e.video && pager.settledPage == i) Reproductor(e.uri)
+                else AsyncImage(e.uri, e.nombre, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            }
+            val e = lista[pager.currentPage]
+            Row(
+                Modifier.fillMaxWidth().background(Color(0x66000000)).padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onCerrar) { Icon(Icons.Outlined.Close, "Cerrar", tint = Color.White) }
+                Text("${pager.currentPage + 1} de ${lista.size}", color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                when {
+                    e.nombre in guardando -> CircularProgressIndicator(Modifier.padding(12.dp).size(22.dp), color = Amarillo, strokeWidth = 2.dp)
+                    e.nombre in guardados -> Icon(Icons.Filled.Check, "Guardado", tint = Amarillo, modifier = Modifier.padding(12.dp))
+                    else -> IconButton(onClick = { onGuardar(e) }) { Icon(Icons.Filled.Download, "Guardar", tint = Color.White) }
+                }
+            }
+        }
+    }
+}
+
+/** El VideoView del sistema: se repite solo y se toca para pausar o seguir. */
+@Composable
+private fun Reproductor(uri: Uri) {
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { c ->
+            val video = VideoView(c)
+            video.setVideoURI(uri)
+            video.setOnPreparedListener { it.isLooping = true; video.start() }
+            // Dentro de un FrameLayout para que quede centrado: el VideoView se encoge a la proporción del video.
+            FrameLayout(c).apply {
+                addView(video, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
+                setOnClickListener { if (video.isPlaying) video.pause() else video.start() }
+            }
+        },
+    )
 }
 
 @Composable

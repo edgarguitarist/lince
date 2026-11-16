@@ -57,23 +57,41 @@ object Motor {
     fun version(ctx: Context): String? = runCatching { YoutubeDL.getInstance().versionName(ctx) }.getOrNull()
 
     suspend fun analizar(ctx: Context, url: String): Analisis {
+        Fotos.directa(url)?.let { return it }
+        val tuit = Fotos.tuit(url)
+        if (tuit != null && !tuit.conVideo && tuit.imagenes.isNotEmpty()) return Analisis.Imagenes(tuit.titulo, url, tuit.imagenes)
+        val r = analizarPagina(ctx, url)
+        // Un tuit con video y fotos: el video sale de yt-dlp y las fotos quedan a mano en la hoja.
+        return if (r is Analisis.Unico && tuit != null) Analisis.Unico(r.video.copy(imagenes = tuit.imagenes)) else r
+    }
+
+    /** Las fotos de la página de un video ya analizado; si no hay, su miniatura. */
+    suspend fun imagenes(ctx: Context, v: Video): Analisis.Imagenes? {
+        if (v.imagenes.isNotEmpty()) return Analisis.Imagenes(v.titulo, v.url, v.imagenes)
+        val web = if (esYoutube(v.url)) null else Navegador.analizar(ctx, v.url, soloImagenes = true) as? Analisis.Imagenes
+        return web ?: v.miniatura?.let { Analisis.Imagenes(v.titulo, v.url, listOf(Imagen(it))) }
+    }
+
+    private suspend fun analizarPagina(ctx: Context, url: String): Analisis {
         iniciar(ctx)
         // Los sitios donde yt-dlp ya fue bloqueado van directo al navegador: ahorra los segundos del intento fallido.
         val host = runCatching { java.net.URI(url).host.removePrefix("www.").removePrefix("m.") }.getOrNull()
         val prefs = ctx.getSharedPreferences("motor", Context.MODE_PRIVATE)
         val conNavegador = prefs.getStringSet("hosts_navegador", emptySet())!!
         if (host != null && host in conNavegador) {
-            Navegador.analizar(ctx, url)?.let { return Analisis.Unico(it) }
+            Navegador.analizar(ctx, url)?.let { return it }
         }
         return try {
             analizarUnaVez(url)
         } catch (e: Exception) {
-            // Primero el navegador (sitios que bloquean a yt-dlp por su huella TLS); si tampoco, puede ser un
+            // Primero el navegador (sitios que bloquean a yt-dlp por su huella TLS, o publicaciones de fotos, donde
+            // yt-dlp no encuentra ningún video); si tampoco, puede ser un
             // yt-dlp viejo: se actualiza y se reintenta una vez. Con YouTube el navegador no sirve: solo se
             // quedaba 30 s esperando (por ejemplo, ante un 429 por muchos pedidos).
             if (!esYoutube(url)) Navegador.analizar(ctx, url)?.let {
-                if (host != null) prefs.edit().putStringSet("hosts_navegador", conNavegador + host).apply()
-                return Analisis.Unico(it)
+                // Solo se recuerda el sitio si dio un video: una publicación de fotos no dice que yt-dlp esté bloqueado.
+                if (host != null && it is Analisis.Unico) prefs.edit().putStringSet("hosts_navegador", conNavegador + host).apply()
+                return it
             }
             if (actualizar(ctx, forzar = true)) analizarUnaVez(url) else throw e
         }
@@ -146,6 +164,10 @@ object Motor {
                 autor = j.str("uploader") ?: j.str("channel"),
                 formatos = formatos,
                 subtitulos = subtitulos(j),
+                // Las deja el plugin lince_tiktok.py en las publicaciones de fotos.
+                imagenes = j.optJSONArray("_lince_fotos")?.let { a ->
+                    (0 until a.length()).mapNotNull { a.optJSONObject(it)?.str("url") }.map { Imagen(it) }
+                }.orEmpty(),
             )
         )
     }

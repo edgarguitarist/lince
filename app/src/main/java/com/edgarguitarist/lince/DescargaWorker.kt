@@ -4,6 +4,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.Uri
+import android.webkit.MimeTypeMap
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
@@ -17,9 +19,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 class DescargaWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
 
@@ -36,6 +42,7 @@ class DescargaWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
     override suspend fun doWork(): Result {
         val url = inputData.getString("url") ?: return Result.failure()
         setForeground(foreground("En cola", null))
+        if (inputData.getString("tipo") == "imagenes") return bajarImagenes(url)
         val dir = File(applicationContext.getExternalFilesDir(null) ?: applicationContext.filesDir, "tmp/$id")
         dir.mkdirs()
         return try {
@@ -74,6 +81,62 @@ class DescargaWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
             Result.failure(workDataOf("error" to msg))
         } finally {
             dir.deleteRecursively()
+        }
+    }
+
+    /** Las fotos de una publicación: HTTP directo, sin yt-dlp. Vale con que baje al menos una. */
+    private suspend fun bajarImagenes(pagina: String): Result = withContext(Dispatchers.IO) {
+        val lista = File(inputData.getString("lista") ?: return@withContext Result.failure())
+        try {
+            val urls = lista.readLines().filter { it.isNotBlank() }
+            val base = nombreArchivo(titulo).take(80)
+            val guardadas = mutableListOf<Pair<Uri, String>>()
+            var fallo: String? = null
+            urls.forEachIndexed { i, u ->
+                ensureActive()
+                setProgressAsync(workDataOf("p" to i * 100 / urls.size))
+                NotificationManagerCompat.from(applicationContext).let {
+                    @Suppress("MissingPermission")
+                    if (it.areNotificationsEnabled()) it.notify(notifId, notificacion("${i + 1} de ${urls.size}", i * 100 / urls.size))
+                }
+                try {
+                    guardadas += bajarImagen(u, pagina, if (urls.size == 1) base else "$base (${i + 1})")
+                } catch (e: Exception) {
+                    fallo = e.message ?: e.toString()
+                }
+            }
+            val (uri, nombre) = guardadas.firstOrNull() ?: error(fallo ?: "La publicación no trae imágenes")
+            notificarFin(uri.toString(), Descargas.mime(nombre))
+            Result.success(workDataOf("uri" to uri.toString(), "mime" to Descargas.mime(nombre), "nombre" to nombre))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val msg = (e.message ?: e.toString()).take(300)
+            notificarError(msg)
+            Result.failure(workDataOf("error" to msg))
+        } finally {
+            lista.delete()
+        }
+    }
+
+    private fun bajarImagen(u: String, pagina: String, base: String): Pair<Uri, String> {
+        val c = URL(u).openConnection() as HttpURLConnection
+        c.connectTimeout = 15_000
+        c.readTimeout = 30_000
+        c.setRequestProperty("User-Agent", Navegador.UA)
+        if (pagina != u) c.setRequestProperty("Referer", pagina) // hay CDN que no sirven la imagen sin él
+        try {
+            if (c.responseCode !in 200..299) error("El servidor respondió ${c.responseCode}")
+            val tipo = c.contentType.orEmpty().substringBefore(';').trim().lowercase()
+            // Una página de error o de inicio de sesión en lugar de la imagen.
+            if (tipo.startsWith("text/") || tipo.endsWith("json")) error("El servidor no entregó una imagen ($tipo)")
+            val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(tipo)
+                ?: URL(u).path.substringAfterLast('.', "").lowercase().takeIf { it in setOf("jpg", "jpeg", "png", "webp", "gif", "avif") }
+                ?: "jpg"
+            val nombre = "$base.$ext"
+            return Descargas.publicar(applicationContext, nombre, null) { c.inputStream } to nombre
+        } finally {
+            c.disconnect()
         }
     }
 

@@ -10,6 +10,7 @@ import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import androidx.annotation.RequiresApi
 import androidx.work.Constraints
+import androidx.work.Data
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
@@ -17,6 +18,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import java.io.File
 import java.io.InputStream
+import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -30,24 +32,41 @@ object Descargas {
             is Opcion.Vid -> "video" to opcion.alto
             is Opcion.Aud -> opcion.formato to 0
         }
+        encolar(
+            ctx, titulo, if (tipo == "video" && alto > 0) "${alto}p" else tipo.uppercase(),
+            workDataOf(
+                "url" to url,
+                "titulo" to titulo,
+                "tipo" to tipo,
+                "alto" to alto,
+                "sub" to sub?.codigo,
+                "subAuto" to (sub?.automatico ?: false),
+                "directo" to directo,
+            ),
+        )
+    }
+
+    /** Encola las fotos de una publicación como una sola descarga. `pagina` va como Referer. */
+    fun encolarImagenes(ctx: Context, titulo: String, pagina: String, imagenes: List<Imagen>) {
+        // Las URLs de los CDN son largas y WorkManager no acepta más de 10 KB de datos: viajan en un archivo.
+        val lista = File(ctx.filesDir, "fotos/${UUID.randomUUID()}.txt")
+        lista.parentFile!!.mkdirs()
+        lista.writeText(imagenes.joinToString("\n") { it.url })
+        encolar(
+            ctx, titulo, if (imagenes.size == 1) "Imagen" else "${imagenes.size} imágenes",
+            workDataOf("url" to pagina, "titulo" to titulo, "tipo" to "imagenes", "lista" to lista.path),
+        )
+    }
+
+    private fun encolar(ctx: Context, titulo: String, etiqueta: String, datos: Data) {
         val req = OneTimeWorkRequestBuilder<DescargaWorker>()
-            .setInputData(
-                workDataOf(
-                    "url" to url,
-                    "titulo" to titulo,
-                    "tipo" to tipo,
-                    "alto" to alto,
-                    "sub" to sub?.codigo,
-                    "subAuto" to (sub?.automatico ?: false),
-                    "directo" to directo,
-                )
-            )
+            .setInputData(datos)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .addTag(TAG)
             // WorkInfo no expone el inputData: el título y el tipo viajan como etiquetas para la lista.
             .addTag("titulo:" + titulo.take(200))
-            .addTag("tipo:" + if (tipo == "video" && alto > 0) "${alto}p" else tipo.uppercase())
+            .addTag("tipo:$etiqueta")
             .build()
         WorkManager.getInstance(ctx).enqueue(req)
     }

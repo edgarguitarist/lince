@@ -42,6 +42,22 @@ class Prueba : BroadcastReceiver() {
                     val r = runCatching { Motor.analizar(app, i.getStringExtra("url")!!) }
                     val alto = (r.getOrNull() as? Analisis.Unico)?.video?.formatos?.mapNotNull { it.alto }?.maxOrNull()
                     Log.i("LincePrueba", "MOTOR ${System.currentTimeMillis() - t0} ms, hasta ${alto}p ${r.exceptionOrNull() ?: ""}")
+                    (r.getOrNull() as? Analisis.Imagenes)?.let { a ->
+                        Log.i("LincePrueba", "IMAGENES ${a.imagenes.size} «${a.titulo.take(60)}» ${a.imagenes.joinToString(" ") { it.url.take(90) }}")
+                        if (i.getBooleanExtra("bajar", false)) {
+                            val titulo = "prueba-${System.currentTimeMillis()}"
+                            Descargas.encolarImagenes(app, titulo, a.pagina, a.imagenes)
+                            val wm = androidx.work.WorkManager.getInstance(app)
+                            while (true) {
+                                kotlinx.coroutines.delay(500)
+                                val w = wm.getWorkInfosByTag("titulo:$titulo").get().firstOrNull() ?: continue
+                                if (w.state.isFinished) {
+                                    Log.i("LincePrueba", "DESCARGA ${w.state} en ${System.currentTimeMillis() - t0} ms ${w.outputData.keyValueMap}")
+                                    break
+                                }
+                            }
+                        }
+                    }
                     Log.i("LincePrueba", "FIN")
                     return@launch
                 }
