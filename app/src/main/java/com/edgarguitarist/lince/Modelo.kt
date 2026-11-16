@@ -92,7 +92,7 @@ fun Video.tamAudio(): Long? = mejorAudio()?.tam
 /** Las dos opciones rápidas de la hoja: hasta 480p y la mejor hasta 1080p. */
 fun Video.opcionesRapidas(): List<Pair<String, Opcion.Vid>> {
     val hs = alturas()
-    if (hs.isEmpty()) return listOf("Mejor calidad" to Opcion.Vid(0, null))
+    if (hs.isEmpty()) return listOf("Mejor calidad" to Opcion.Vid(0, formatos.singleOrNull()?.tam))
     val rapido = hs.lastOrNull { it <= 480 } ?: hs.first()
     val alta = hs.lastOrNull { it <= 1080 } ?: hs.last()
     val out = mutableListOf("Rápido (${rapido}p)" to Opcion.Vid(rapido, tamVideo(rapido)))

@@ -1,6 +1,6 @@
 # Mejoras pendientes
 
-Análisis del 2026-11-09 (versión 0.6.4). Nada de esto está implementado todavía: es la lista para trabajar después.
+Análisis del 2026-11-09 (versión 0.6.4). Cada sección dice arriba qué quedó hecho y qué falta (al 2026-11-15).
 
 Antes de optimizar, **medir**: correr un análisis con `-v` en el teléfono y anotar cuánto se va en arrancar Python,
 en la red y en el desafío JS. Sin eso es fácil optimizar lo que no pesa.
@@ -8,6 +8,14 @@ en la red y en el desafío JS. Sin eso es fácil optimizar lo que no pesa.
 ---
 
 ## 1. «Analizando enlace…» más rápido
+
+> **Hecho** (2026-11-15, tras la 0.7.0): 1.1 (la actualización diaria ya no va en el arranque: la lanza
+> `Motor.analizar` al terminar), 1.2 (`--cache-dir` en `filesDir/cache-ytdlp`), 1.3 solo `skip=hls`
+> (`translated_subs` no: quitaría los subtítulos automáticos en español e inglés que la hoja ofrece) y 1.4 (título y
+> miniatura por oEmbed mientras analiza). **Falta** 1.5: el JSON del análisis no sirve tal cual para la descarga,
+> porque esta extrae con `formats=dashy` (lo que da el multihilo) y el análisis no; habría que analizar también con
+> `dashy` y medir en el teléfono que no cueste más. Tampoco se probó `player_skip=webpage`. Medido en BlueStacks:
+> YouTube 6,8 s el primer análisis y 5,3 s el segundo.
 
 Ya está bien optimizado: el desafío JS va por V8 (`MotorJs.kt` + `lince_jcp.py`), el player de YouTube queda en caché
 y para analizar se usa un solo cliente (`YT_RAPIDO`). Queda esto:
@@ -26,6 +34,12 @@ youtubedl-android no ofrece un proceso persistente.
 ---
 
 ## 2. Sitios que no pasan por yt-dlp (o no deberían)
+
+> **Hecho** (2026-11-15): 2.1, 2.2 (solo video: `.mp4 .m4v .webm .mkv .mov`; 0,5 s en BlueStacks), 2.4 (anuncios,
+> rastreadores y fuentes; el CSS no, porque las fotos se eligen por su tamaño en la página), 2.5 a medias (el `HEAD`
+> espera 3 s en vez de 8; la hoja sigue esperándolos) y 2.7 (la lista se vacía cuando yt-dlp se actualiza).
+> Además el navegador ya no espera los 8 s de `flashvars` si la página no lo trae, y corre en cada página que
+> termina de cargar (hay sitios que pasan antes por una de verificación). **Falta** 2.3, 2.6 y 2.8.
 
 Hoy hay dos caminos: yt-dlp y el `Navegador` (WebView) para los sitios que bloquean a yt-dlp por su huella TLS.
 El camino del navegador es el más lento de toda la app (hasta 30 s + 8 s esperando `flashvars`).
@@ -47,7 +61,8 @@ El camino del navegador es el más lento de toda la app (hasta 30 s + 8 s espera
 
 > **Hecho en la 0.7.0** (2026-11-15): visor a pantalla completa con `HorizontalPager`, fotos con Coil, videos con el
 > `VideoView` del sistema (sin Media3: se repite solo y se toca para pausar) y botón Guardar. **Falta** de esta
-> propuesta: zoom en las fotos, Compartir, «Abrir con…» y cerrar deslizando hacia abajo.
+> propuesta: nada salvo Media3. Zoom (pellizco y doble toque), Compartir, «Abrir con…» y cerrar deslizando hacia
+> abajo se añadieron el 2026-11-15; el arrastre de la foto ampliada se limita a la caja, no a la imagen.
 
 Hoy, al tocar un estado se abre otra app (`Intent.ACTION_VIEW`, `PantallaEstados.kt:152`): depende de qué galería
 tenga el teléfono y saca al usuario de Lince.
@@ -64,6 +79,12 @@ Propuesta: un visor propio a pantalla completa.
 ---
 
 ## 4. Aviso de versión nueva: «manda a una página de error»
+
+> **Hecho** (2026-11-15): 1 (compara firmas y explica que hay que desinstalar), 2 (el botón de Acerca usa el diálogo
+> de la app; el navegador queda de respaldo), 3 (ese botón funciona en debug), 5 (abre el ajuste de «apps
+> desconocidas» e instala solo al volver) y el registro de errores (`LinceActualizador`). Probado en BlueStacks con
+> un release 0.6.9: aviso, descarga, ajuste del permiso, instalador y 0.7.0 instalada. **Falta** 4 (ABI en
+> `BuildConfig`): en BlueStacks eligió bien el `x86_64`. El caso de firma distinta no se probó.
 
 Revisado desde aquí: el repo es público, `api.github.com/repos/edgarguitarist/lince/releases/latest` responde 200,
 el release `v0.6.4` trae los tres APK (`arm64-v8a`, `armeabi-v7a`, `x86_64`) y `github.com/…/releases/latest`

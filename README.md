@@ -24,7 +24,7 @@ Desde la 0.6.4, Lince avisa al abrirse cuando hay una versión nueva y, si acept
 
 ## Estados de WhatsApp
 
-Pestaña «Estados»: muestra los estados que ya viste en WhatsApp (o WhatsApp Business) y los guarda en `Descargas/Lince/Estados`. WhatsApp los deja en `Android/media/com.whatsapp/WhatsApp/Media/.Statuses`; desde Android 11 esa carpeta solo se puede leer con el selector del sistema, así que se pide acceso una vez (el selector se abre justo ahí) y el permiso queda guardado. Solo aparecen los estados ya abiertos en WhatsApp: los baja recién cuando los ves.
+Pestaña «Estados»: muestra los estados que ya viste en WhatsApp (o WhatsApp Business) y los guarda en `Descargas/Lince/Estados`. WhatsApp los deja en `Android/media/com.whatsapp/WhatsApp/Media/.Statuses`; desde Android 11 esa carpeta solo se puede leer con el selector del sistema, así que se pide acceso una vez (el selector se abre justo ahí) y el permiso queda guardado. Solo aparecen los estados ya abiertos en WhatsApp: los baja recién cuando los ves. Al tocar uno se abre en un visor dentro de la app: se desliza entre estados, las fotos se amplían con pellizco o doble toque y desde ahí se guarda, se comparte o se abre con otra app.
 
 ## Sitios que bloquean a yt-dlp
 

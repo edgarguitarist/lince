@@ -1,5 +1,10 @@
 package com.edgarguitarist.lince.ui
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,20 +29,45 @@ import com.edgarguitarist.lince.Actualizador
 import com.edgarguitarist.lince.tamTexto
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.io.File
 
 /** Al abrir la app: si hay una versión nueva en GitHub, pregunta si se actualiza y baja el APK que corresponde. */
 @Composable
 fun AvisoActualizacion() {
     val ctx = LocalContext.current
     var nueva by remember { mutableStateOf<Actualizador.Nueva?>(null) }
-    var progreso by remember { mutableStateOf<Float?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) { nueva = Actualizador.buscar(ctx)?.takeIf { Actualizador.toca(ctx, it) } }
     val n = nueva ?: return
-    val cerrar = {
+    DialogoActualizacion(n) {
         Actualizador.omitir(ctx, n)
         nueva = null
+    }
+}
+
+/** El diálogo de «versión nueva»: lo usan el aviso al abrir y el botón «Buscar nueva versión» de Acerca. */
+@Composable
+fun DialogoActualizacion(n: Actualizador.Nueva, cerrar: () -> Unit) {
+    val ctx = LocalContext.current
+    var progreso by remember { mutableStateOf<Float?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var esperandoPermiso by remember { mutableStateOf<File?>(null) }
+    val scope = rememberCoroutineScope()
+    val permiso = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val f = esperandoPermiso ?: return@rememberLauncherForActivityResult
+        esperandoPermiso = null
+        if (ctx.packageManager.canRequestPackageInstalls()) Actualizador.instalar(ctx, f)
+        else error = "Sin el permiso «Instalar apps desconocidas» para Lince, Android no deja instalar la actualización."
+    }
+    val instalar: (File) -> Unit = { f ->
+        if (!Actualizador.mismaFirma(ctx, f)) {
+            error = "Esta versión está firmada con otra llave que la Lince instalada, y Android no deja actualizar " +
+                "encima. Desinstala Lince una vez y luego instala el APK nuevo."
+        } else if (!ctx.packageManager.canRequestPackageInstalls()) {
+            esperandoPermiso = f
+            permiso.launch(
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}"))
+            )
+        } else Actualizador.instalar(ctx, f)
     }
 
     AlertDialog(
@@ -64,7 +94,7 @@ fun AvisoActualizacion() {
                     progreso = 0f
                     error = null
                     try {
-                        Actualizador.instalar(ctx, Actualizador.bajar(ctx, n) { progreso = it })
+                        instalar(Actualizador.bajar(ctx, n) { progreso = it })
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

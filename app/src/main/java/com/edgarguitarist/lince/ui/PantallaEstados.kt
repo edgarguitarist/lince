@@ -11,6 +11,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +38,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Refresh
@@ -44,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,10 +62,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -196,13 +210,29 @@ private fun Visor(
     onCerrar: () -> Unit,
 ) {
     Dialog(onDismissRequest = onCerrar, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val ctx = LocalContext.current
         val pager = rememberPagerState(initialPage = inicio) { lista.size }
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
-            HorizontalPager(pager, Modifier.fillMaxSize()) { i ->
+        // Con la foto ampliada el arrastre mueve la foto, no el pager.
+        var ampliado by remember { mutableStateOf(false) }
+        LaunchedEffect(pager.currentPage) { ampliado = false }
+        Box(
+            Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
+                // Solo ve los arrastres que nadie consumió: el pager se queda los horizontales y la foto ampliada los suyos.
+                var dy = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { dy = 0f },
+                    onDragCancel = { dy = 0f },
+                    onDragEnd = { if (dy > 100.dp.toPx() && !ampliado) onCerrar() },
+                    onVerticalDrag = { _, d -> dy += d },
+                )
+            }
+        ) {
+            HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !ampliado) { i ->
                 val e = lista[i]
                 // Solo reproduce el video que está a la vista; los de al lado muestran su primer cuadro.
                 if (e.video && pager.settledPage == i) Reproductor(e.uri)
-                else AsyncImage(e.uri, e.nombre, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                else if (e.video) AsyncImage(e.uri, e.nombre, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                else FotoZoom(e) { ampliado = it }
             }
             val e = lista[pager.currentPage]
             Row(
@@ -211,6 +241,22 @@ private fun Visor(
             ) {
                 IconButton(onClick = onCerrar) { Icon(Icons.Outlined.Close, "Cerrar", tint = Color.White) }
                 Text("${pager.currentPage + 1} de ${lista.size}", color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                IconButton(onClick = {
+                    val enviar = Intent(Intent.ACTION_SEND).apply {
+                        type = Descargas.mime(e.nombre)
+                        putExtra(Intent.EXTRA_STREAM, e.uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    runCatching { ctx.startActivity(Intent.createChooser(enviar, "Compartir")) }
+                }) { Icon(Icons.Filled.Share, "Compartir", tint = Color.White) }
+                IconButton(onClick = {
+                    runCatching {
+                        ctx.startActivity(
+                            Intent(Intent.ACTION_VIEW).setDataAndType(e.uri, Descargas.mime(e.nombre))
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        )
+                    }
+                }) { Icon(Icons.Filled.OpenInNew, "Abrir con…", tint = Color.White) }
                 when {
                     e.nombre in guardando -> CircularProgressIndicator(Modifier.padding(12.dp).size(22.dp), color = Amarillo, strokeWidth = 2.dp)
                     e.nombre in guardados -> Icon(Icons.Filled.Check, "Guardado", tint = Amarillo, modifier = Modifier.padding(12.dp))
@@ -219,6 +265,50 @@ private fun Visor(
             }
         }
     }
+}
+
+/** Foto con zoom: pellizco 1x–5x, arrastre al ampliar y doble toque 1x ↔ 2,5x. */
+@Composable
+private fun FotoZoom(e: Estados.Estado, onZoom: (Boolean) -> Unit) {
+    var escala by remember { mutableFloatStateOf(1f) }
+    var desplaza by remember { mutableStateOf(Offset.Zero) }
+    var caja by remember { mutableStateOf(IntSize.Zero) }
+    // Sin pasarse del borde de la foto ampliada.
+    fun limitar(o: Offset, s: Float): Offset {
+        val mx = caja.width * (s - 1f) / 2f
+        val my = caja.height * (s - 1f) / 2f
+        return Offset(o.x.coerceIn(-mx, mx), o.y.coerceIn(-my, my))
+    }
+    AsyncImage(
+        e.uri, e.nombre, contentScale = ContentScale.Fit,
+        modifier = Modifier.fillMaxSize()
+            .onSizeChanged { caja = it }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val ev = awaitPointerEvent()
+                        // A 1x con un dedo no se consume nada: el gesto le llega al pager.
+                        if (escala > 1f || ev.changes.size > 1) {
+                            val s = (escala * ev.calculateZoom()).coerceIn(1f, 5f)
+                            escala = s
+                            desplaza = if (s > 1f) limitar(desplaza + ev.calculatePan(), s) else Offset.Zero
+                            onZoom(s > 1f)
+                            ev.changes.forEach { it.consume() }
+                        }
+                    } while (ev.changes.any { it.pressed })
+                }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(onDoubleTap = {
+                    val z = if (escala > 1f) 1f else 2.5f
+                    escala = z
+                    desplaza = Offset.Zero
+                    onZoom(z > 1f)
+                })
+            }
+            .graphicsLayer(scaleX = escala, scaleY = escala, translationX = desplaza.x, translationY = desplaza.y),
+    )
 }
 
 /** El VideoView del sistema: se repite solo y se toca para pausar o seguir. */

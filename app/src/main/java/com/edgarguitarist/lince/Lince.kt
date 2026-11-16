@@ -24,8 +24,9 @@ class Lince : Application(), ImageLoaderFactory {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CANAL_PROGRESO, "Descargas en curso", NotificationManager.IMPORTANCE_LOW))
         nm.createNotificationChannel(NotificationChannel(CANAL_LISTAS, "Descargas terminadas", NotificationManager.IMPORTANCE_DEFAULT))
-        // Deja Python y yt-dlp listos (y al día) antes de que llegue el primer enlace.
-        scope.launch { runCatching { Motor.iniciar(this@Lince); Motor.actualizar(this@Lince) } }
+        // Deja Python y yt-dlp listos antes de que llegue el primer enlace. La actualización diaria de yt-dlp no va
+        // aquí: competía por la red con el primer análisis; la lanza Motor.analizar cuando ya terminó.
+        scope.launch { runCatching { Motor.iniciar(this@Lince) } }
     }
 
     // Miniaturas de los estados en video: Coil saca un cuadro del MP4.

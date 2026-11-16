@@ -5,6 +5,8 @@ import android.content.Context
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +17,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.coroutines.resume
@@ -29,6 +32,14 @@ import kotlin.coroutines.resume
 object Navegador {
     // Escritorio, como hace yt-dlp (`platform=pc`): la página de PC trae `flashvars_*` con todas las calidades.
     const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+
+    private val reFuente = Regex("""\.(woff2?|ttf|otf|eot)$""")
+    private val BLOQUEADOS = setOf(
+        "doubleclick.net", "googlesyndication.com", "googleadservices.com", "googletagservices.com",
+        "googletagmanager.com", "google-analytics.com", "amazon-adsystem.com", "adnxs.com", "criteo.com",
+        "taboola.com", "outbrain.com", "scorecardresearch.com", "hotjar.com",
+        "exoclick.com", "trafficjunky.net", "trafficjunky.com", "juicyads.com", "popads.net",
+    )
 
     private val reAlto = Regex("""(\d{3,4})[pP]_\d+[kK]""")
 
@@ -80,11 +91,12 @@ object Navegador {
     }
 
     /** Tamaño real con un HEAD, para mostrarlo en la hoja como Snaptube. */
-    private fun tamano(u: String, referer: String): Long? = runCatching {
+    fun tamano(u: String, referer: String): Long? = runCatching {
         val c = URL(u).openConnection() as HttpURLConnection
         c.requestMethod = "HEAD"
-        c.connectTimeout = 8000
-        c.readTimeout = 8000
+        // Corto: la hoja espera estos tamaños, y un CDN sano contesta en décimas. Si no llega, se muestra sin tamaño.
+        c.connectTimeout = 3000
+        c.readTimeout = 3000
         c.setRequestProperty("User-Agent", UA)
         c.setRequestProperty("Referer", referer)
         try {
@@ -132,6 +144,13 @@ object Navegador {
         }, "Lince")
         val js = "window.LINCE_SOLO_IMG=$soloImagenes;" + ctx.assets.open("navegador.js").bufferedReader().use { it.readText() }
         web.webViewClient = object : WebViewClient() {
+            // Anuncios, rastreadores y fuentes no aportan nada a lo que se busca y son lo que más demora la carga.
+            override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): WebResourceResponse? {
+                val h = req.url.host.orEmpty()
+                val sobra = BLOQUEADOS.any { h == it || h.endsWith(".$it") } || reFuente.containsMatchIn(req.url.path.orEmpty())
+                return if (sobra) WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0))) else null
+            }
+
             // En cada página que termina de cargar: hay sitios que pasan primero por una de verificación y redirigen,
             // y el script de la primera muere con ella. El propio script evita correr dos veces en la misma página.
             override fun onPageFinished(view: WebView, u: String?) {

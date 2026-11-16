@@ -108,6 +108,10 @@ class AnalisisVM(app: Application) : AndroidViewModel(app) {
         private set
     private var url: String? = null
 
+    /** Título y miniatura que se muestran mientras termina el análisis (ver [Motor.previa]). */
+    var previa by mutableStateOf<Pair<String, String?>?>(null)
+        private set
+
     /** Pasa de la hoja del video a las fotos de su publicación. */
     fun imagenes(v: Video) {
         estado = Estado.Cargando
@@ -121,6 +125,8 @@ class AnalisisVM(app: Application) : AndroidViewModel(app) {
         if (u == url && !forzar) return
         url = u
         estado = Estado.Cargando
+        previa = null
+        viewModelScope.launch { Motor.previa(u)?.let { if (url == u) previa = it } }
         viewModelScope.launch {
             estado = try {
                 Estado.Listo(Motor.analizar(getApplication(), u))
@@ -161,7 +167,7 @@ fun HojaDescarga(url: String, onCerrar: () -> Unit) {
                 .padding(bottom = 16.dp)
         ) {
             when (val e = vm.estado) {
-                Estado.Cargando -> VistaCargando(url)
+                Estado.Cargando -> VistaCargando(url, vm.previa)
                 is Estado.Error -> VistaError(e.msg) { vm.analizar(url, forzar = true) }
                 is Estado.Listo -> when (val a = e.analisis) {
                     is Analisis.Imagenes -> VistaImagenes(a) { elegidas ->
@@ -196,8 +202,10 @@ private fun Seccion(texto: String) {
 }
 
 @Composable
-private fun VistaCargando(url: String) {
+private fun VistaCargando(url: String, previa: Pair<String, String?>?) {
     Titulo("Descargar")
+    // Con el título y la miniatura a la vista, la espera del análisis se siente mucho más corta.
+    if (previa != null) Cabecera(Video(url, previa.first, previa.second, null, null, emptyList(), emptyList()))
     Spacer(Modifier.height(28.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         CircularProgressIndicator(Modifier.size(26.dp), color = Amarillo, strokeWidth = 3.dp)

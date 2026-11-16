@@ -3,7 +3,10 @@ package com.edgarguitarist.lince
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -16,6 +19,8 @@ import java.net.URL
 /** Avisa de las versiones nuevas publicadas en GitHub y baja el APK de la misma arquitectura que la instalada. */
 object Actualizador {
     private const val API = "https://api.github.com/repos/edgarguitarist/lince/releases/latest"
+
+    private const val TAG = "LinceActualizador"
 
     data class Nueva(val version: String, val notas: String, val url: String, val tam: Long)
 
@@ -31,8 +36,13 @@ object Actualizador {
     }
 
     /** La versión nueva, o null si no hay (o no se pudo consultar). Las builds debug no preguntan. */
-    suspend fun buscar(ctx: Context): Nueva? = withContext(Dispatchers.IO) {
-        if (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) return@withContext null
+    suspend fun buscar(ctx: Context): Nueva? {
+        if (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) return null
+        return consultar(ctx).getOrNull()
+    }
+
+    /** Para el botón manual: distingue «no hay nada nuevo» (éxito con null) de «falló la consulta». Sirve también en debug. */
+    suspend fun consultar(ctx: Context): Result<Nueva?> = withContext(Dispatchers.IO) {
         runCatching {
             val j = JSONObject(abrir(API).inputStream.bufferedReader().use { it.readText() })
             val version = j.getString("tag_name").removePrefix("v")
@@ -44,8 +54,18 @@ object Actualizador {
             val a = (0 until assets.length()).map { assets.getJSONObject(it) }
                 .firstOrNull { it.getString("name").endsWith("-${abi(ctx)}.apk") } ?: return@runCatching null
             Nueva(version, notas(j.optString("body")), a.getString("browser_download_url"), a.optLong("size"))
-        }.getOrNull()
+        }.onFailure { Log.w(TAG, "No se pudo consultar la versión nueva", it) }
     }
+
+    /** Android no deja actualizar encima si la firma cambió; el APK sin firma legible se deja al instalador. */
+    fun mismaFirma(ctx: Context, f: File): Boolean = runCatching {
+        val pm = ctx.packageManager
+        val flags = PackageManager.GET_SIGNING_CERTIFICATES
+        fun firmas(i: PackageInfo?) = i?.signingInfo?.apkContentsSigners?.map { it.toCharsString() }?.toSet()
+        val nuevas = firmas(pm.getPackageArchiveInfo(f.path, flags)) ?: return@runCatching true
+        val actuales = firmas(pm.getPackageInfo(ctx.packageName, flags)) ?: return@runCatching true
+        nuevas == actuales
+    }.getOrDefault(true)
 
     /** "Ahora no": no vuelve a preguntar por esa versión hasta el día siguiente. */
     fun omitir(ctx: Context, n: Nueva) = prefs(ctx).edit()
@@ -117,6 +137,9 @@ object Actualizador {
             setRequestProperty("User-Agent", "Lince") // la API de GitHub rechaza pedidos sin User-Agent
             connectTimeout = 15_000
             readTimeout = 30_000
-            if (responseCode != 200) error("GitHub respondió $responseCode")
+            if (responseCode != 200) {
+                Log.w(TAG, "GitHub respondió $responseCode para $url") // p. ej. 403 por el límite de la API
+                error("GitHub respondió $responseCode")
+            }
         }
 }

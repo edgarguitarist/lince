@@ -27,7 +27,11 @@ import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,6 +40,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.edgarguitarist.lince.Actualizador
+import kotlinx.coroutines.launch
 
 private const val REPO = "https://github.com/edgarguitarist/lince"
 
@@ -51,6 +57,23 @@ fun PantallaAcerca(modifier: Modifier = Modifier) {
             Toast.makeText(ctx, "No hay navegador para abrir el enlace", Toast.LENGTH_SHORT).show()
         }
     }
+
+    val scope = rememberCoroutineScope()
+    var nueva by remember { mutableStateOf<Actualizador.Nueva?>(null) }
+    var buscando by remember { mutableStateOf(false) }
+    val buscar = {
+        if (!buscando) scope.launch {
+            buscando = true
+            val r = Actualizador.consultar(ctx)
+            buscando = false
+            r.onSuccess {
+                nueva = it
+                if (it == null) Toast.makeText(ctx, "Ya tienes la última versión", Toast.LENGTH_SHORT).show()
+            }.onFailure { abrir("$REPO/releases/latest") } // respaldo: que el navegador lo muestre
+        }
+        Unit
+    }
+    nueva?.let { DialogoActualizacion(it) { nueva = null } }
 
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         Text("Versión $version · por Edgar Laz", color = TextoSec, fontSize = 14.sp)
@@ -72,7 +95,7 @@ fun PantallaAcerca(modifier: Modifier = Modifier) {
 
         Titulo("Proyecto")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Enlace(Icons.Outlined.SystemUpdate, "Buscar nueva versión", "Descargas en GitHub") { abrir("$REPO/releases/latest") }
+            Enlace(Icons.Outlined.SystemUpdate, "Buscar nueva versión", if (buscando) "Buscando…" else "Descargas en GitHub", buscar)
             Enlace(Icons.Outlined.Code, "Código fuente", "github.com/edgarguitarist/lince") { abrir(REPO) }
         }
         Spacer(Modifier.height(16.dp))

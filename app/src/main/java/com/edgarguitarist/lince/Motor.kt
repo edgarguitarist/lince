@@ -6,6 +6,7 @@ import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -21,8 +22,10 @@ object Motor {
      */
     const val YT_CLIENTES = "youtube:player_client=web_embedded,mweb"
 
-    /** Para analizar basta `web_embedded`: `mweb` suma dos pedidos (~0,8 s) y solo se usa si el video no se deja insertar. */
-    private const val YT_RAPIDO = "youtube:player_client=web_embedded"
+    /**
+     * Sin el manifiesto HLS (un pedido menos): la descarga usa `formats=dashy`, no HLS.
+     * Para analizar basta `web_embedded`: `mweb` suma dos pedidos (~0,8 s) y solo se usa si el video no se deja insertar. */
+    private const val YT_RAPIDO = "youtube:player_client=web_embedded;skip=hls"
 
     private val mutexInicio = Mutex()
     private val mutexUpdate = Mutex()
@@ -49,6 +52,8 @@ object Motor {
             runCatching {
                 val r = YoutubeDL.getInstance().updateYoutubeDL(ctx.applicationContext, YoutubeDL.UpdateChannel.STABLE)
                 prefs.edit().putLong("ultima_actualizacion", System.currentTimeMillis()).apply()
+                // Con un yt-dlp nuevo, los sitios que iban por el navegador (más lento) merecen otro intento.
+                if (r == YoutubeDL.UpdateStatus.DONE) prefs.edit().remove("hosts_navegador").apply()
                 r == YoutubeDL.UpdateStatus.DONE
             }.getOrDefault(false)
         }
@@ -56,11 +61,46 @@ object Motor {
 
     fun version(ctx: Context): String? = runCatching { YoutubeDL.getInstance().versionName(ctx) }.getOrNull()
 
+    private val reVideo = Regex("""\.(mp4|m4v|webm|mkv|mov)$""", RegexOption.IGNORE_CASE)
+
+    /** Un enlace directo a un archivo de video: basta un HEAD (~0,2 s), sin arrancar Python ni yt-dlp. */
+    private suspend fun directo(url: String): Analisis? {
+        val ruta = runCatching { java.net.URL(url).path }.getOrNull() ?: return null
+        if (!reVideo.containsMatchIn(ruta)) return null
+        // Si el servidor no contesta el HEAD (pide sesión o cabeceras), que lo intente yt-dlp.
+        val tam = withContext(Dispatchers.IO) { Navegador.tamano(url, url) } ?: return null
+        val archivo = ruta.substringAfterLast('/')
+        val formato = Formato("directo", archivo.substringAfterLast('.').lowercase(), null, null, null, tam, url)
+        return Analisis.Unico(
+            Video(url, archivo.substringBeforeLast('.').ifBlank { "Video" }, null, null, null, listOf(formato), emptyList(), directo = true)
+        )
+    }
+
+    /** Título y miniatura para mostrar mientras se analiza. Solo YouTube: su oEmbed contesta en ~0,2 s. */
+    suspend fun previa(url: String): Pair<String, String?>? = withContext(Dispatchers.IO) {
+        if (!esYoutube(url)) return@withContext null
+        runCatching {
+            val c = java.net.URL("https://www.youtube.com/oembed?format=json&url=" + java.net.URLEncoder.encode(url, "UTF-8"))
+                .openConnection() as java.net.HttpURLConnection
+            c.connectTimeout = 4000
+            c.readTimeout = 4000
+            val j = try {
+                JSONObject(c.inputStream.bufferedReader().readText())
+            } finally {
+                c.disconnect()
+            }
+            j.getString("title") to j.optString("thumbnail_url").takeIf { it.startsWith("http") }
+        }.getOrNull()
+    }
+
     suspend fun analizar(ctx: Context, url: String): Analisis {
         Fotos.directa(url)?.let { return it }
+        directo(url)?.let { return it }
         val tuit = Fotos.tuit(url)
         if (tuit != null && !tuit.conVideo && tuit.imagenes.isNotEmpty()) return Analisis.Imagenes(tuit.titulo, url, tuit.imagenes)
         val r = analizarPagina(ctx, url)
+        // La actualización diaria de yt-dlp, ahora que el análisis ya no compite con ella por la red.
+        (ctx.applicationContext as? Lince)?.scope?.launch { runCatching { actualizar(ctx.applicationContext) } }
         // Un tuit con video y fotos: el video sale de yt-dlp y las fotos quedan a mano en la hoja.
         return if (r is Analisis.Unico && tuit != null) Analisis.Unico(r.video.copy(imagenes = tuit.imagenes)) else r
     }
@@ -73,14 +113,15 @@ object Motor {
     }
 
     private suspend fun analizarPagina(ctx: Context, url: String): Analisis {
-        iniciar(ctx)
-        // Los sitios donde yt-dlp ya fue bloqueado van directo al navegador: ahorra los segundos del intento fallido.
+        // Los sitios donde yt-dlp ya fue bloqueado van directo al navegador: ahorra los segundos del intento fallido
+        // (y, si la app recién abre, no espera a que arranque Python).
         val host = runCatching { java.net.URI(url).host.removePrefix("www.").removePrefix("m.") }.getOrNull()
         val prefs = ctx.getSharedPreferences("motor", Context.MODE_PRIVATE)
         val conNavegador = prefs.getStringSet("hosts_navegador", emptySet())!!
         if (host != null && host in conNavegador) {
             Navegador.analizar(ctx, url)?.let { return it }
         }
+        iniciar(ctx)
         return try {
             analizarUnaVez(url)
         } catch (e: Exception) {

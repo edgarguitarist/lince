@@ -67,6 +67,9 @@ object MotorJs {
     fun opciones(req: YoutubeDLRequest) {
         val d = dir ?: return
         req.addOption("--plugin-dirs", d.absolutePath)
+        // Caché en una carpeta que seguro existe y persiste: ahí yt-dlp guarda el player de YouTube y los desafíos
+        // ya resueltos, y los reusa entre un análisis y la descarga.
+        req.addOption("--cache-dir", File(app.filesDir, "cache-ytdlp").absolutePath)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
