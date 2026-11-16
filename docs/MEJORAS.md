@@ -45,6 +45,10 @@ El camino del navegador es el más lento de toda la app (hasta 30 s + 8 s espera
 
 ## 3. Estados: verlos dentro de la app
 
+> **Hecho en la 0.7.0** (2026-11-15): visor a pantalla completa con `HorizontalPager`, fotos con Coil, videos con el
+> `VideoView` del sistema (sin Media3: se repite solo y se toca para pausar) y botón Guardar. **Falta** de esta
+> propuesta: zoom en las fotos, Compartir, «Abrir con…» y cerrar deslizando hacia abajo.
+
 Hoy, al tocar un estado se abre otra app (`Intent.ACTION_VIEW`, `PantallaEstados.kt:152`): depende de qué galería
 tenga el teléfono y saca al usuario de Lince.
 
