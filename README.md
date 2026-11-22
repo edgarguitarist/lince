@@ -7,6 +7,7 @@ Descargador para Android al estilo Snaptube, sin anuncios. Compartes un enlace d
 - **Subtítulos**: los del video (y los automáticos en español, inglés o el idioma original), incrustados en el MP4 (los reproductores los muestran como pista).
 - **Más formatos**: todas las resoluciones disponibles.
 - **Listas**: elegir qué vídeos y la calidad; se bajan de a dos.
+- **Videos que se ven en todos lados**: si llegan en HEVC, VP9 o AV1 (hasta 1080p) o con audio que no es AAC-LC (Instagram y Facebook sirven HEVC con HE-AAC), se pasan a H.264 + AAC-LC. Sin eso el iPhone los muestra sin sonido en los estados de WhatsApp. Lo hace el plugin `lince_compat.py`; si la conversión falla, queda el original.
 - **TikTok de fotos** (`/photo/`, que yt-dlp no reconoce): arma un MP4 con las fotos y la música, o baja solo el audio. Lo hacen los plugins `lince_tiktok.py` y `lince_fotos.py`.
 - **Imágenes**: un enlace directo a una imagen, o las fotos de una publicación (carruseles incluidos), en una cuadrícula para marcar cuáles bajar. Si el enlace tiene video, la fila «Imágenes» de la hoja busca las fotos de esa página. Los tuits salen de la API pública de tuits insertados (`Fotos.kt`); el resto, de abrir la página en un WebView invisible y quedarse con las imágenes grandes de la publicación (`assets/navegador.js`).
 

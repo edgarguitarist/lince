@@ -185,20 +185,25 @@ class DescargaWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
                     addOption("--embed-thumbnail")
                     addOption("--convert-thumbnails", "jpg")
                 }
-                else -> if (directo == null) {
-                    addOption("-f", "bv*+ba/b")
-                    // A igual resolución, H.264: YouTube sirve AV1 por defecto y muchos reproductores (o WhatsApp) no lo abren.
-                    // Pasado 1080p no hay H.264 y se queda con VP9/AV1.
-                    addOption("-S", if (alto > 0) "res:$alto,vcodec:h264,ext:mp4:m4a" else "vcodec:h264,ext:mp4:m4a")
-                    addOption("--merge-output-format", "mp4")
-                    // Publicaciones de fotos de TikTok: arma el MP4 con las fotos y la música (plugin lince_fotos.py).
-                    addOption("--use-postprocessor", "LinceFotos:when=after_move")
-                    if (sub != null) {
-                        addOption(if (inputData.getBoolean("subAuto", false)) "--write-auto-subs" else "--write-subs")
-                        addOption("--sub-langs", sub)
-                        addOption("--convert-subs", "srt")
-                        addOption("--embed-subs")
+                else -> {
+                    if (directo == null) {
+                        addOption("-f", "bv*+ba/b")
+                        // A igual resolución, H.264: YouTube sirve AV1 por defecto y muchos reproductores (o WhatsApp) no lo abren.
+                        // Pasado 1080p no hay H.264 y se queda con VP9/AV1.
+                        addOption("-S", if (alto > 0) "res:$alto,vcodec:h264,ext:mp4:m4a" else "vcodec:h264,ext:mp4:m4a")
+                        addOption("--merge-output-format", "mp4")
+                        // Publicaciones de fotos de TikTok: arma el MP4 con las fotos y la música (plugin lince_fotos.py).
+                        addOption("--use-postprocessor", "LinceFotos:when=after_move")
+                        if (sub != null) {
+                            addOption(if (inputData.getBoolean("subAuto", false)) "--write-auto-subs" else "--write-subs")
+                            addOption("--sub-langs", sub)
+                            addOption("--convert-subs", "srt")
+                            addOption("--embed-subs")
+                        }
                     }
+                    // HEVC o HE-AAC (Instagram, Facebook, enlaces directos) -> H.264 + AAC-LC: el iPhone los muestra
+                    // sin sonido en los estados de WhatsApp (plugin lince_compat.py). Va después de LinceFotos.
+                    addOption("--use-postprocessor", "LinceCompat:when=after_move")
                 }
             }
         }

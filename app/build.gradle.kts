@@ -12,8 +12,8 @@ android {
         applicationId = "com.edgarguitarist.lince"
         minSdk = 28
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.7.1"
+        versionCode = 14
+        versionName = "0.7.2"
         // `-PidSufijo=.mt` instala una copia aparte (para probar sin pisar la versión instalada).
         (project.findProperty("idSufijo") as String?)?.let { applicationIdSuffix = it }
     }
