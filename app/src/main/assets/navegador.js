@@ -38,6 +38,18 @@
         } else add(d.videoUrl, Array.isArray(d.quality) ? 0 : d.quality);
       }
     }
+    // Reddit: su API pide sesión y el <video> vive en un shadow DOM. El reproductor del post trae MP4 ya armados con
+    // audio (packaged-media-json) y el HLS en `src`; los otros reproductores de la página son GIF de los comentarios.
+    const rp = !out.formats.length && document.querySelector('shreddit-post shreddit-player, shreddit-post shreddit-player-2');
+    if (rp) {
+      try {
+        const pm = JSON.parse(rp.getAttribute('packaged-media-json')).playbackMp4s;
+        for (const x of pm.permutations) add(x.source.url, x.source.dimensions.height);
+        out.dur = pm.duration;
+      } catch (e) {}
+      if (!out.formats.length) add(rp.getAttribute('src'));
+      out.thumb = rp.getAttribute('poster');
+    }
     if (!out.formats.length) {
       document.querySelectorAll('video, video source').forEach(v => add(v.currentSrc || v.src, v.videoHeight));
       add(meta('meta[property="og:video:secure_url"]'));
